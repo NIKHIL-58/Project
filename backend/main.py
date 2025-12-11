@@ -21,6 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ⭐ Default root route
+@app.get("/")
+async def home():
+    return {"message": "FastAPI backend is running successfully!"}
 
 @app.post("/register")
 async def register(user: User):
