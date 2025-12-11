@@ -5,3 +5,4 @@ passlib
 python-jose
 bcrypt
 pydantic
+python-dotenv
