@@ -1,16 +1,19 @@
+# backend/main.py
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from datetime import timedelta
+
 from auth import create_access_token, get_password_hash, verify_password
 from models import User
 from database import db
-from datetime import timedelta
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# CORS कॉन्फ़िगरेशन
 origins = [
-    "http://localhost:3000",  # आपके फ्रंटएंड का URL
+    "http://localhost:3000",
+    "https://fastapi-backend-fcs2.onrender.com",
+    "*",  # simple ke liye: later tum specific origins rakh sakte ho
 ]
 
 app.add_middleware(
@@ -32,6 +35,7 @@ async def register(user: User):
     await db.users.insert_one({"username": user.username, "password": hashed_password})
     return {"message": "User created"}
 
+
 @app.post("/login")
 async def login(user: User):
     db_user = await db.users.find_one({"username": user.username})
@@ -41,4 +45,5 @@ async def login(user: User):
             data={"sub": user.username}, expires_delta=access_token_expires
         )
         return {"access_token": access_token, "token_type": "bearer"}
+
     raise HTTPException(status_code=400, detail="Incorrect username or password")
