@@ -1,5 +1,3 @@
-# backend/main.py
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta
@@ -11,9 +9,8 @@ from database import db
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",
-    "https://fastapi-backend-fcs2.onrender.com",
-    "*",  # simple ke liye: later tum specific origins rakh sakte ho
+    "http://localhost:3000",                     # local React
+    "https://react-frontend-ierv.onrender.com",  # deployed React
 ]
 
 app.add_middleware(
@@ -24,7 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ⭐ Default root route
 @app.get("/")
 async def home():
     return {"message": "FastAPI backend is running successfully!"}
@@ -34,7 +30,6 @@ async def register(user: User):
     hashed_password = get_password_hash(user.password)
     await db.users.insert_one({"username": user.username, "password": hashed_password})
     return {"message": "User created"}
-
 
 @app.post("/login")
 async def login(user: User):
