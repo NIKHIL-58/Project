@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { register } from '../api';
-import { useNavigate } from 'react-router-dom';
+// src/pages/Register.js
+import React, { useState } from "react";
+import { register } from "../api";
+import { useNavigate } from "react-router-dom";
 
 function Register() {
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: ''
+    username: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const navigate = useNavigate();
@@ -19,16 +20,20 @@ function Register() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match!');
+      alert("Passwords do not match!");
       return;
     }
+
     try {
+      // ✅ Backend ko sirf username + password bhejna hai
       await register(formData.username, formData.password);
-      alert('User registered! Now please log in.');
-      navigate('/login');
+      alert("User registered! Now please log in.");
+      navigate("/login");
     } catch (error) {
-      alert('Registration failed!');
+      console.error(error);
+      alert("Registration failed!");
     }
   };
 
@@ -47,28 +52,29 @@ function Register() {
             required
           />
         </div>
+
         <div className="mb-3">
-          <label className="form-label">Email</label>
+          <label className="form-label">Email (optional)</label>
           <input
             type="email"
             className="form-control"
             name="email"
             value={formData.email}
             onChange={handleChange}
-            required
           />
         </div>
+
         <div className="mb-3">
-          <label className="form-label">Phone</label>
+          <label className="form-label">Phone (optional)</label>
           <input
             type="tel"
             className="form-control"
             name="phone"
             value={formData.phone}
             onChange={handleChange}
-            required
           />
         </div>
+
         <div className="mb-3">
           <label className="form-label">Password</label>
           <input
@@ -80,6 +86,7 @@ function Register() {
             required
           />
         </div>
+
         <div className="mb-3">
           <label className="form-label">Confirm Password</label>
           <input
@@ -91,7 +98,18 @@ function Register() {
             required
           />
         </div>
-        <button type="submit" className="btn btn-primary">Register</button>
+
+        <button type="submit" className="btn btn-primary">
+          Register
+        </button>
+
+        <button
+          type="button"
+          className="btn btn-link ms-2"
+          onClick={() => navigate("/login")}
+        >
+          Already have an account? Login
+        </button>
       </form>
     </div>
   );

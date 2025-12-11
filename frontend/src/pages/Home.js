@@ -1,8 +1,9 @@
-import React from 'react';
+// src/pages/Home.js
+import React from "react";
 
 function Home() {
   return (
-    <div>
+    <div className="container mt-5">
       <h2>Welcome to the Home Page!</h2>
       <p>You are logged in.</p>
     </div>

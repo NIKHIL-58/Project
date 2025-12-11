@@ -1,9 +1,19 @@
-import axios from 'axios';
+// frontend/src/api.js
+import axios from "axios";
 
-const API_URL = 'http://localhost:8000'; // अपना FastAPI का URL यहाँ डालें
+// ✅ Deployed FastAPI backend URL
+const API_URL = "https://fastapi-backend-fcs2.onrender.com";
 
-export const login = (username, password) =>
-  axios.post(`${API_URL}/login`, { username, password });
+export const register = (username, password) => {
+  return axios.post(`${API_URL}/register`, {
+    username,
+    password,
+  });
+};
 
-export const register = (username, password) =>
-  axios.post(`${API_URL}/register`, { username, password });
+export const login = (username, password) => {
+  return axios.post(`${API_URL}/login`, {
+    username,
+    password,
+  });
+};
