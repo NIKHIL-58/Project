@@ -1,5 +1,9 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 MONGO_URI = os.getenv("MONGODB_URI")
 
