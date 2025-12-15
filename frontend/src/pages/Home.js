@@ -93,7 +93,7 @@ function Home() {
           <a className="navbar-brand" href="/home">
             <i className="fas fa-home mr-2"></i>
             Dashboard
-          </a>
+          </a>  
           <button
             className="navbar-toggler"
             type="button"
@@ -124,6 +124,16 @@ function Home() {
       {/* Main Content */}
       <div className="container-fluid mt-4">
         <div className="row">
+          {/* JD Generation Button */}
+          <div className="col-12 mb-4">
+            <button 
+              className="btn btn-primary"
+              onClick={() => navigate('/generate-jd')}
+            >
+              <i className="fas fa-plus mr-2"></i>
+              Generate Job Description
+            </button>
+          </div>
           {/* Welcome Card */}
           <div className="col-12 mb-4">
             <div className="card welcome-card">
