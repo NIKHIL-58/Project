@@ -10,7 +10,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",                     # local React
-    "https://react-frontend-ierv.onrender.com",  # deployed React
+    "https://smarthire-cojo.onrender.com",  # deployed React
 ]
 
 app.add_middleware(
