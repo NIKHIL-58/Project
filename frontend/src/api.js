@@ -16,3 +16,11 @@ export const login = (username, password) => {
 export const generateJD = (profile) => {
   return axios.post(`${API_URL}/generate-jd`, { profile });
 };
+
+export const saveJD = (username, profile, jd_text) => {
+  return axios.post(`${API_URL}/save-jd`, { username, profile, jd_text });
+};
+
+export const getMyJDs = (username) => {
+  return axios.get(`${API_URL}/my-jds`, { params: { username } });
+};

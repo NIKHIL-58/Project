@@ -1,8 +1,8 @@
 // src/pages/GenerateJD.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { generateJD } from "../api";
-import "./Home.css"; // optional (same styling), या अलग CSS बना लो
+import { generateJD, saveJD } from "../api"; // ✅ saveJD add
+import "./Home.css"; // optional
 
 function GenerateJD() {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ function GenerateJD() {
     setLoading(true);
     try {
       const res = await generateJD(profile);
-      setJd(res.data.job_description);
+      setJd(res.data.job_description || "");
     } catch (err) {
       console.error(err);
       alert("❌ JD generate failed. Backend error / OpenAI config check karo.");
@@ -33,18 +33,27 @@ function GenerateJD() {
     }
   };
 
-  const handleSaveLocal = () => {
-    // अभी simple save: localStorage में (Dashboard पर दिखाने के लिए आगे backend endpoint बना देंगे)
-    const saved = JSON.parse(localStorage.getItem("savedJDs") || "[]");
-    saved.push({
-      id: Date.now(),
-      profile,
-      jd,
-      createdAt: new Date().toLocaleString(),
-    });
-    localStorage.setItem("savedJDs", JSON.stringify(saved));
-    alert("✅ JD saved locally (temporary). अब Dashboard पर दिखा सकते हैं.");
-    navigate("/home");
+  // ✅ अब localStorage नहीं, DB में save होगा
+  const handleSave = async () => {
+    try {
+      const username = localStorage.getItem("username");
+      if (!username) {
+        alert("❌ Username missing. Please login again.");
+        navigate("/login");
+        return;
+      }
+      if (!jd.trim()) {
+        alert("❌ JD empty hai, pehle generate karo.");
+        return;
+      }
+
+      await saveJD(username, profile, jd);
+      alert("✅ JD saved permanently!");
+      navigate("/home");
+    } catch (err) {
+      console.error(err);
+      alert("❌ JD save failed (backend error).");
+    }
   };
 
   return (
@@ -91,7 +100,7 @@ function GenerateJD() {
 
         <button
           className="btn btn-success mt-3"
-          onClick={handleSaveLocal}
+          onClick={handleSave}
           disabled={!jd.trim()}
         >
           Save JD

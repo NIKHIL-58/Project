@@ -1,6 +1,7 @@
 // src/pages/Home.js
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { getMyJDs } from "../api";
 import "./Home.css";
 
 function Home() {
@@ -8,18 +9,33 @@ function Home() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [savedJDs, setSavedJDs] = useState([]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     const storedUsername = localStorage.getItem("username");
-    
+
     if (!token) {
       navigate("/login");
       return;
     }
-    
+
     setUsername(storedUsername || "User");
+
+    // ✅ useEffect के अंदर async function
+    const fetchJDs = async () => {
+      try {
+        if (!storedUsername) return;
+        const res = await getMyJDs(storedUsername);
+        setSavedJDs(res.data.items || []);
+      } catch (err) {
+        console.error("Fetch JDs failed", err);
+      }
+    };
+
+    fetchJDs();
   }, [navigate]);
 
   const handleLogout = () => {
@@ -31,26 +47,21 @@ function Home() {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    if (file) setSelectedFile(file);
   };
 
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setSelectedFile(e.dataTransfer.files[0]);
     }
@@ -72,7 +83,7 @@ function Home() {
   };
 
   const handleDeleteFile = (id) => {
-    setUploadedFiles(uploadedFiles.filter(file => file.id !== id));
+    setUploadedFiles(uploadedFiles.filter((file) => file.id !== id));
   };
 
   const getFileIcon = (type) => {
@@ -93,15 +104,7 @@ function Home() {
           <a className="navbar-brand" href="/home">
             <i className="fas fa-home mr-2"></i>
             Dashboard
-          </a>  
-          <button
-            className="navbar-toggler"
-            type="button"
-            data-toggle="collapse"
-            data-target="#navbarNav"
-          >
-            <span className="navbar-toggler-icon"></span>
-          </button>
+          </a>
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav ml-auto">
               <li className="nav-item">
@@ -126,14 +129,12 @@ function Home() {
         <div className="row">
           {/* JD Generation Button */}
           <div className="col-12 mb-4">
-            <button 
-              className="btn btn-primary"
-              onClick={() => navigate('/generate-jd')}
-            >
+            <button className="btn btn-primary" onClick={() => navigate("/generate-jd")}>
               <i className="fas fa-plus mr-2"></i>
               Generate Job Description
             </button>
           </div>
+
           {/* Welcome Card */}
           <div className="col-12 mb-4">
             <div className="card welcome-card">
@@ -142,9 +143,7 @@ function Home() {
                   <i className="fas fa-hand-sparkles mr-2"></i>
                   Welcome back, {username}!
                 </h2>
-                <p className="welcome-subtitle">
-                  Here's what's happening with your account today
-                </p>
+                <p className="welcome-subtitle">Here's what's happening with your account today</p>
               </div>
             </div>
           </div>
@@ -169,8 +168,7 @@ function Home() {
                   <i className="fas fa-database"></i>
                 </div>
                 <h3 className="stat-number">
-                  {uploadedFiles.reduce((acc, file) => 
-                    acc + parseFloat(file.size), 0).toFixed(2)} KB
+                  {uploadedFiles.reduce((acc, file) => acc + parseFloat(file.size), 0).toFixed(2)} KB
                 </h3>
                 <p className="stat-label">Storage Used</p>
               </div>
@@ -213,12 +211,7 @@ function Home() {
                     <i className="fas fa-folder-open mr-2"></i>
                     Browse Files
                   </label>
-                  <input
-                    type="file"
-                    id="fileInput"
-                    className="d-none"
-                    onChange={handleFileChange}
-                  />
+                  <input type="file" id="fileInput" className="d-none" onChange={handleFileChange} />
                 </div>
 
                 {selectedFile && (
@@ -231,17 +224,11 @@ function Home() {
                           ({(selectedFile.size / 1024).toFixed(2)} KB)
                         </small>
                       </div>
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() => setSelectedFile(null)}
-                      >
+                      <button className="btn btn-sm btn-danger" onClick={() => setSelectedFile(null)}>
                         <i className="fas fa-times"></i>
                       </button>
                     </div>
-                    <button
-                      className="btn btn-success btn-block mt-3"
-                      onClick={handleUpload}
-                    >
+                    <button className="btn btn-success btn-block mt-3" onClick={handleUpload}>
                       <i className="fas fa-upload mr-2"></i>
                       Upload File
                     </button>
@@ -292,6 +279,46 @@ function Home() {
               </div>
             </div>
           </div>
+
+          {/* ✅ Saved JDs Section */}
+          <div className="col-12 mb-4">
+            <div className="card files-card">
+              <div className="card-header">
+                <h5 className="card-title mb-0">
+                  <i className="fas fa-briefcase mr-2"></i>
+                  Saved Job Descriptions
+                </h5>
+              </div>
+              <div className="card-body">
+                {savedJDs.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-muted">No JDs saved yet</p>
+                  </div>
+                ) : (
+                  <div className="files-list">
+                    {savedJDs.map((jd) => (
+                      <div key={jd.id} className="file-item">
+                        <div className="file-info">
+                          <i className="fas fa-file-alt file-icon"></i>
+                          <div className="file-details">
+                            <strong>{jd.profile}</strong>
+                            <small className="text-muted d-block">{jd.created_at}</small>
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => alert(jd.jd_text)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

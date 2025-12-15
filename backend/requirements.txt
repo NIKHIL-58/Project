@@ -1,12 +1,10 @@
 fastapi
 uvicorn
 motor
-python-jose
-bcrypt
-pydantic
+pymongo
 python-dotenv
 python-jose[cryptography]
 passlib==1.7.4
-pymongo
-motor
-openai
+bcrypt
+pydantic
+openai>=1.0.0
