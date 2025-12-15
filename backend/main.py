@@ -1,31 +1,27 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta
+from pydantic import BaseModel
+import os
 
 from auth import create_access_token, get_password_hash, verify_password
 from models import User
 from database import db
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import timedelta
-from pydantic import BaseModel
-from auth import create_access_token, get_password_hash, verify_password
-from database import db
-import openai
-import os
+# ✅ New OpenAI SDK (openai>=1.0.0)
+from openai import OpenAI
 
 # Load OpenAI API key from environment variable
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Initialize OpenAI client
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",                     # local React
-    "https://smarthire-cojo.onrender.com",  # deployed React
+    "http://localhost:3000",              # local React
+    "https://smarthire-cojo.onrender.com" # deployed React
 ]
 
 app.add_middleware(
@@ -36,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ⭐ Default root route
 @app.get("/")
 async def home():
     return {"message": "FastAPI backend is running successfully!"}
@@ -52,29 +49,59 @@ async def login(user: User):
     if db_user and verify_password(user.password, db_user["password"]):
         access_token_expires = timedelta(minutes=30)
         access_token = create_access_token(
-            data={"sub": user.username}, expires_delta=access_token_expires
+            data={"sub": user.username},
+            expires_delta=access_token_expires
         )
         return {"access_token": access_token, "token_type": "bearer"}
 
     raise HTTPException(status_code=400, detail="Incorrect username or password")
 
 
-# Define a request model for JD generation
+# ✅ JD generation request model
 class JDRequest(BaseModel):
     profile: str
 
+
 @app.post("/generate-jd")
 async def generate_jd(request: JDRequest):
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set in environment")
+
     profile = request.profile
-    prompt = f"Generate a job description for a {profile} role suitable for a hiring platform."
-    
+
+    prompt = f"""
+Generate a professional Job Description (JD) for the role: {profile}.
+Include:
+1) Job Title
+2) Role Summary
+3) Responsibilities (6-10 bullet points)
+4) Required Skills
+5) Preferred Skills
+6) Experience
+7) Education
+8) Nice-to-have
+Make it hiring-ready and structured.
+"""
+
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",  # या जो भी मॉडल आप इस्तेमाल कर रहे हैं
-            prompt=prompt,
-            max_tokens=150
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert HR recruiter and job description writer."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=700
         )
-        jd_text = response.choices[0].text.strip()
+
+        jd_text = resp.choices[0].message.content.strip()
         return {"profile": profile, "job_description": jd_text}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ Optional: check key quickly
+@app.get("/check-openai")
+async def check_openai():
+    return {"has_key": bool(os.getenv("OPENAI_API_KEY"))}
