@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-import GenerateJD from "./pages/GenerateJD"; // नया JD generation page import करें
+import GenerateJD from "./pages/GenerateJD"; 
 
 function App() {
   return (
@@ -14,7 +14,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/home" element={<Home />} />
-        <Route path="/generate-jd" element={<GenerateJD />} /> {/* नया रूट जोड़ें */}
+        <Route path="/generate-jd" element={<GenerateJD />} /> 
       </Routes>
     </Router>
   );
