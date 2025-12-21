@@ -1,4 +1,4 @@
-// src/pages/Home.js
+// ✅ src/pages/Home.js (FINAL - Correct)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMyJDs } from "../api";
@@ -24,11 +24,10 @@ function Home() {
 
     setUsername(storedUsername || "User");
 
-    // ✅ useEffect के अंदर async function
+    // ✅ token based fetch (username param nahi)
     const fetchJDs = async () => {
       try {
-        if (!storedUsername) return;
-        const res = await getMyJDs(storedUsername);
+        const res = await getMyJDs();
         setSavedJDs(res.data.items || []);
       } catch (err) {
         console.error("Fetch JDs failed", err);
@@ -67,6 +66,7 @@ function Home() {
     }
   };
 
+  // ✅ अभी ये local list में upload दिखा रहा है (backend upload बाद में add कर देंगे)
   const handleUpload = () => {
     if (selectedFile) {
       const newFile = {

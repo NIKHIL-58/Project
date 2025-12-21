@@ -8,3 +8,8 @@ passlib==1.7.4
 bcrypt
 pydantic
 openai>=1.0.0
+python-multipart
+pymupdf
+python-docx
+scikit-learn
+numpy

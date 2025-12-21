@@ -1,7 +1,7 @@
-// src/pages/GenerateJD.js
+// ✅ src/pages/GenerateJD.js  (FINAL - Correct)
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { generateJD, saveJD } from "../api"; // ✅ saveJD add
+import { generateJD, saveJD } from "../api"; // ✅ saveJD used
 import "./Home.css"; // optional
 
 function GenerateJD() {
@@ -33,21 +33,24 @@ function GenerateJD() {
     }
   };
 
-  // ✅ अब localStorage नहीं, DB में save होगा
+  // ✅ अब DB में save होगा (JWT token headers api.js में handle होंगे)
   const handleSave = async () => {
     try {
-      const username = localStorage.getItem("username");
-      if (!username) {
-        alert("❌ Username missing. Please login again.");
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("❌ Token missing. Please login again.");
         navigate("/login");
         return;
       }
+
       if (!jd.trim()) {
         alert("❌ JD empty hai, pehle generate karo.");
         return;
       }
 
-      await saveJD(username, profile, jd);
+      // ✅ IMPORTANT: username pass nahi karna
+      await saveJD(profile, jd);
+
       alert("✅ JD saved permanently!");
       navigate("/home");
     } catch (err) {
