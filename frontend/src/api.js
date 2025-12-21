@@ -48,3 +48,7 @@ export const matchResumes = (jd_id, top_k = 5) =>
 
 export const getMyMatches = () =>
   axios.get(`${API_URL}/my-matches`, { headers: authHeader() });
+
+export const getResumeText = (resume_id) =>
+  axios.get(`${API_URL}/resume-text/${resume_id}`, { headers: authHeader() });
+

@@ -1,5 +1,5 @@
 // src/pages/Home.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getMyJDs,
@@ -7,6 +7,7 @@ import {
   getMyResumes,
   matchResumes,
   getMyMatches,
+  getResumeText, // ✅ add
 } from "../api";
 import "./Home.css";
 
@@ -15,65 +16,62 @@ function Home() {
 
   const [username, setUsername] = useState("");
 
-  // existing file UI
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [dragActive, setDragActive] = useState(false);
-
-  // JD data
+  // JDs
   const [savedJDs, setSavedJDs] = useState([]);
-  const [viewJDText, setViewJDText] = useState("");
-  const [viewJDTitle, setViewJDTitle] = useState("");
+  const [selectedJDId, setSelectedJDId] = useState("");
 
-  // Resume Upload + list
+  // Resume upload (permanent)
   const [resumeFile, setResumeFile] = useState(null);
-  const [resumeUploading, setResumeUploading] = useState(false);
   const [myResumes, setMyResumes] = useState([]);
+  const [loadingResume, setLoadingResume] = useState(false);
 
   // Matching
-  const [selectedJDId, setSelectedJDId] = useState("");
-  const [matching, setMatching] = useState(false);
-  const [matches, setMatches] = useState([]);
+  const [matchResults, setMatchResults] = useState([]);
+  const [myMatches, setMyMatches] = useState([]);
+  const [loadingMatch, setLoadingMatch] = useState(false);
 
-  const storageUsedKB = useMemo(() => {
-    const sum = uploadedFiles.reduce((acc, file) => acc + parseFloat(file.size), 0);
-    return Number.isFinite(sum) ? sum.toFixed(2) : "0.00";
-  }, [uploadedFiles]);
+  // Resume Preview Modal
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewResume, setPreviewResume] = useState({ filename: "", text: "" });
 
-  const requireAuth = () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return false;
-    }
-    return true;
-  };
+  const safeMsg = (err, fallback = "No reason") =>
+    err?.response?.data?.detail || err?.message || fallback;
 
-  const fetchDashboardData = async () => {
+  const fetchAll = async () => {
     try {
-      // JDs
-      const jdRes = await getMyJDs();
-      setSavedJDs(jdRes?.data?.items || []);
+      const [jdsRes, resumesRes, matchesRes] = await Promise.all([
+        getMyJDs(),
+        getMyResumes(),
+        getMyMatches(),
+      ]);
 
-      // Resumes
-      const resumeRes = await getMyResumes();
-      setMyResumes(resumeRes?.data?.items || []);
+      const jds = jdsRes?.data?.items || [];
+      setSavedJDs(jds);
+      if (jds.length > 0) setSelectedJDId((prev) => prev || jds[0].id);
 
-      // Matches
-      const matchRes = await getMyMatches();
-      setMatches(matchRes?.data?.items || []);
+      setMyResumes(resumesRes?.data?.items || []);
+      setMyMatches(matchesRes?.data?.items || []);
     } catch (err) {
-      console.error("Dashboard fetch failed:", err);
+      console.error(err);
+      if (err?.response?.status === 401) {
+        alert("Session expired. Please login again.");
+        navigate("/login");
+      }
     }
   };
 
   useEffect(() => {
-    if (!requireAuth()) return;
-
+    const token = localStorage.getItem("token");
     const storedUsername = localStorage.getItem("username");
-    setUsername(storedUsername || "User");
 
-    fetchDashboardData();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setUsername(storedUsername || "User");
+    fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
@@ -84,107 +82,95 @@ function Home() {
     navigate("/login");
   };
 
-  // ===== Existing local file upload UI (as you had) =====
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+  // -------------------------
+  // JD Download (TXT)
+  // -------------------------
+  const downloadJD = (jd) => {
+    const content = `PROFILE: ${jd.profile}\nCREATED_AT: ${jd.created_at}\n\n${jd.jd_text || ""}`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    const safeName = (jd.profile || "JD").replace(/[^a-z0-9]/gi, "_");
+    a.href = url;
+    a.download = `${safeName}_${jd.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
   };
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-    else if (e.type === "dragleave") setDragActive(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleUpload = () => {
-    if (selectedFile) {
-      const newFile = {
-        id: Date.now(),
-        name: selectedFile.name,
-        size: (selectedFile.size / 1024).toFixed(2) + " KB",
-        type: selectedFile.type,
-        uploadDate: new Date().toLocaleString(),
-      };
-      setUploadedFiles([...uploadedFiles, newFile]);
-      setSelectedFile(null);
-      alert("✅ File uploaded successfully!");
-    }
-  };
-
-  const handleDeleteFile = (id) => {
-    setUploadedFiles(uploadedFiles.filter((file) => file.id !== id));
-  };
-
-  const getFileIcon = (type) => {
-    if (!type) return "fa-file";
-    if (type.includes("image")) return "fa-file-image";
-    if (type.includes("pdf")) return "fa-file-pdf";
-    if (type.includes("word")) return "fa-file-word";
-    if (type.includes("excel") || type.includes("spreadsheet")) return "fa-file-excel";
-    if (type.includes("video")) return "fa-file-video";
-    if (type.includes("audio")) return "fa-file-audio";
-    return "fa-file";
-  };
-
-  // ===== JD View =====
-  const handleViewJD = (jdItem) => {
-    setViewJDTitle(jdItem?.profile || "JD");
-    setViewJDText(jdItem?.jd_text || "");
-    alert((jdItem?.jd_text || "").slice(0, 1500) + (jdItem?.jd_text?.length > 1500 ? "\n\n...(more)" : ""));
-  };
-
-  // ===== Resume Upload (backend) =====
+  // -------------------------
+  // Resume Upload (Permanent)
+  // -------------------------
   const handleResumePick = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setResumeFile(file);
+    const f = e.target.files?.[0];
+    if (f) setResumeFile(f);
   };
 
   const handleResumeUpload = async () => {
+    if (!resumeFile) {
+      alert("❌ Please choose a PDF/DOCX resume first.");
+      return;
+    }
+    setLoadingResume(true);
     try {
-      if (!resumeFile) {
-        alert("❌ Please select a resume file first.");
-        return;
-      }
-      setResumeUploading(true);
       await uploadResume(resumeFile);
-      alert("✅ Resume uploaded!");
+      alert("✅ Resume uploaded permanently!");
       setResumeFile(null);
-      await fetchDashboardData();
+      await fetchAll();
     } catch (err) {
       console.error(err);
-      alert("❌ Resume upload failed (backend error).");
+      alert(`❌ ${safeMsg(err, "Resume upload failed")}`);
     } finally {
-      setResumeUploading(false);
+      setLoadingResume(false);
     }
   };
 
-  // ===== Matching =====
-  const handleRunMatch = async () => {
+  // -------------------------
+  // Resume Preview (Modal)
+  // -------------------------
+  const openPreview = async (resume_id) => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewResume({ filename: "", text: "" });
+
     try {
-      if (!selectedJDId) {
-        alert("❌ Please select a JD first.");
-        return;
-      }
-      setMatching(true);
-      await matchResumes(selectedJDId, 5);
-      alert("✅ Match created! (Top candidates calculated)");
-      await fetchDashboardData();
+      const res = await getResumeText(resume_id);
+      setPreviewResume({
+        filename: res?.data?.filename || "Resume",
+        text: res?.data?.text || "",
+      });
     } catch (err) {
       console.error(err);
-      alert("❌ Matching failed (backend error).");
+      alert(`❌ ${safeMsg(err, "Preview failed")}`);
+      setPreviewOpen(false);
     } finally {
-      setMatching(false);
+      setPreviewLoading(false);
+    }
+  };
+
+  // -------------------------
+  // Match Resumes
+  // -------------------------
+  const handleMatch = async () => {
+    if (!selectedJDId) {
+      alert("❌ Please select a JD first.");
+      return;
+    }
+
+    setLoadingMatch(true);
+    try {
+      const res = await matchResumes(selectedJDId, 5);
+      setMatchResults(res?.data?.items || []);
+      alert("✅ Matching done!");
+      await fetchAll();
+    } catch (err) {
+      console.error(err);
+      alert(`❌ ${safeMsg(err, "Match failed")}`);
+    } finally {
+      setLoadingMatch(false);
     }
   };
 
@@ -220,7 +206,7 @@ function Home() {
       {/* Main Content */}
       <div className="container-fluid mt-4">
         <div className="row">
-          {/* JD Generation Button */}
+          {/* Generate JD */}
           <div className="col-12 mb-4">
             <button className="btn btn-primary" onClick={() => navigate("/generate-jd")}>
               <i className="fas fa-plus mr-2"></i>
@@ -228,7 +214,7 @@ function Home() {
             </button>
           </div>
 
-          {/* Welcome Card */}
+          {/* Welcome */}
           <div className="col-12 mb-4">
             <div className="card welcome-card">
               <div className="card-body">
@@ -236,140 +222,14 @@ function Home() {
                   <i className="fas fa-hand-sparkles mr-2"></i>
                   Welcome back, {username}!
                 </h2>
-                <p className="welcome-subtitle">Here's what's happening with your account today</p>
+                <p className="welcome-subtitle">
+                  Here's what's happening with your account today
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="col-md-4 mb-4">
-            <div className="card stat-card stat-card-blue">
-              <div className="card-body">
-                <div className="stat-icon">
-                  <i className="fas fa-file-upload"></i>
-                </div>
-                <h3 className="stat-number">{uploadedFiles.length}</h3>
-                <p className="stat-label">Total Files</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4 mb-4">
-            <div className="card stat-card stat-card-green">
-              <div className="card-body">
-                <div className="stat-icon">
-                  <i className="fas fa-database"></i>
-                </div>
-                <h3 className="stat-number">{storageUsedKB} KB</h3>
-                <p className="stat-label">Storage Used</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4 mb-4">
-            <div className="card stat-card stat-card-purple">
-              <div className="card-body">
-                <div className="stat-icon">
-                  <i className="fas fa-clock"></i>
-                </div>
-                <h3 className="stat-number">Active</h3>
-                <p className="stat-label">Account Status</p>
-              </div>
-            </div>
-          </div>
-
-          {/* File Upload Section (your existing UI) */}
-          <div className="col-lg-6 mb-4">
-            <div className="card upload-card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-cloud-upload-alt mr-2"></i>
-                  Upload Files
-                </h5>
-              </div>
-              <div className="card-body">
-                <div
-                  className={`upload-area ${dragActive ? "drag-active" : ""}`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <i className="fas fa-cloud-upload-alt upload-icon"></i>
-                  <h5>Drag & Drop your files here</h5>
-                  <p className="text-muted">or</p>
-                  <label htmlFor="fileInput" className="btn btn-primary">
-                    <i className="fas fa-folder-open mr-2"></i>
-                    Browse Files
-                  </label>
-                  <input type="file" id="fileInput" className="d-none" onChange={handleFileChange} />
-                </div>
-
-                {selectedFile && (
-                  <div className="selected-file mt-3">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>
-                        <i className={`fas ${getFileIcon(selectedFile.type)} mr-2`}></i>
-                        <strong>{selectedFile.name}</strong>
-                        <small className="text-muted ml-2">
-                          ({(selectedFile.size / 1024).toFixed(2)} KB)
-                        </small>
-                      </div>
-                      <button className="btn btn-sm btn-danger" onClick={() => setSelectedFile(null)}>
-                        <i className="fas fa-times"></i>
-                      </button>
-                    </div>
-
-                    <button className="btn btn-success btn-block mt-3" onClick={handleUpload}>
-                      <i className="fas fa-upload mr-2"></i>
-                      Upload File
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Files (your existing UI) */}
-          <div className="col-lg-6 mb-4">
-            <div className="card files-card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-folder-open mr-2"></i>
-                  Recent Files
-                </h5>
-              </div>
-              <div className="card-body">
-                {uploadedFiles.length === 0 ? (
-                  <div className="text-center py-5">
-                    <i className="fas fa-folder-open empty-folder-icon"></i>
-                    <p className="text-muted mt-3">No files uploaded yet</p>
-                  </div>
-                ) : (
-                  <div className="files-list">
-                    {uploadedFiles.map((file) => (
-                      <div key={file.id} className="file-item">
-                        <div className="file-info">
-                          <i className={`fas ${getFileIcon(file.type)} file-icon`}></i>
-                          <div className="file-details">
-                            <strong>{file.name}</strong>
-                            <small className="text-muted d-block">
-                              {file.size} • {file.uploadDate}
-                            </small>
-                          </div>
-                        </div>
-                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteFile(file.id)}>
-                          <i className="fas fa-trash"></i>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ✅ Saved JDs */}
+          {/* ✅ Saved JDs + Match */}
           <div className="col-12 mb-4">
             <div className="card files-card">
               <div className="card-header d-flex justify-content-between align-items-center">
@@ -378,28 +238,29 @@ function Home() {
                   Saved Job Descriptions
                 </h5>
 
-                {/* quick match controls */}
-                <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                <div className="d-flex gap-2 align-items-center" style={{ minWidth: 340 }}>
                   <select
                     className="form-control"
-                    style={{ minWidth: 260 }}
                     value={selectedJDId}
                     onChange={(e) => setSelectedJDId(e.target.value)}
                   >
-                    <option value="">Select JD to Match</option>
-                    {savedJDs.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.profile}
-                      </option>
-                    ))}
+                    {savedJDs.length === 0 ? (
+                      <option value="">No JDs</option>
+                    ) : (
+                      savedJDs.map((jd) => (
+                        <option key={jd.id} value={jd.id}>
+                          {jd.profile}
+                        </option>
+                      ))
+                    )}
                   </select>
 
                   <button
-                    className="btn btn-outline-primary"
-                    onClick={handleRunMatch}
-                    disabled={matching || !selectedJDId}
+                    className="btn btn-success"
+                    onClick={handleMatch}
+                    disabled={loadingMatch || savedJDs.length === 0}
                   >
-                    {matching ? "Matching..." : "Match Resumes"}
+                    {loadingMatch ? "Matching..." : "Match Resumes"}
                   </button>
                 </div>
               </div>
@@ -420,9 +281,21 @@ function Home() {
                             <small className="text-muted d-block">{jd.created_at}</small>
                           </div>
                         </div>
-                        <button className="btn btn-sm btn-outline-primary" onClick={() => handleViewJD(jd)}>
-                          View
-                        </button>
+
+                        <div className="d-flex gap-2">
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => alert(jd.jd_text)}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => downloadJD(jd)}
+                          >
+                            Download
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -431,33 +304,31 @@ function Home() {
             </div>
           </div>
 
-          {/* ✅ Resume Upload (backend) */}
+          {/* ✅ Resume Upload Permanent (Only this one kept) */}
           <div className="col-12 mb-4">
             <div className="card upload-card">
               <div className="card-header">
                 <h5 className="card-title mb-0">
-                  <i className="fas fa-file-upload mr-2"></i>
+                  <i className="fas fa-upload mr-2"></i>
                   Resume Upload (Permanent)
                 </h5>
               </div>
 
               <div className="card-body">
-                <div className="d-flex align-items-center" style={{ gap: 10, flexWrap: "wrap" }}>
-                  <input type="file" className="form-control" onChange={handleResumePick} />
-                  <button
-                    className="btn btn-success"
-                    onClick={handleResumeUpload}
-                    disabled={resumeUploading || !resumeFile}
-                  >
-                    {resumeUploading ? "Uploading..." : "Upload Resume"}
-                  </button>
-                </div>
+                <input type="file" className="form-control" onChange={handleResumePick} />
+                <button
+                  className="btn btn-success mt-3"
+                  onClick={handleResumeUpload}
+                  disabled={loadingResume}
+                >
+                  {loadingResume ? "Uploading..." : "Upload Resume"}
+                </button>
 
                 <hr />
 
-                <h6 className="mb-2">My Resumes</h6>
+                <h5 className="mb-3">My Resumes</h5>
                 {myResumes.length === 0 ? (
-                  <p className="text-muted">No resumes uploaded yet.</p>
+                  <p className="text-muted">No resumes uploaded yet</p>
                 ) : (
                   <div className="files-list">
                     {myResumes.map((r) => (
@@ -465,11 +336,14 @@ function Home() {
                         <div className="file-info">
                           <i className="fas fa-file-pdf file-icon"></i>
                           <div className="file-details">
-                            <strong>{r.filename || "Resume"}</strong>
+                            <strong>{r.filename}</strong>
                             <small className="text-muted d-block">{r.created_at}</small>
                           </div>
                         </div>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => alert(r.text_preview || "No preview")}>
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => openPreview(r.id)}
+                        >
                           Preview
                         </button>
                       </div>
@@ -480,32 +354,74 @@ function Home() {
             </div>
           </div>
 
-          {/* ✅ Matches */}
+          {/* ✅ Match Results (Latest) */}
           <div className="col-12 mb-4">
             <div className="card files-card">
               <div className="card-header">
                 <h5 className="card-title mb-0">
                   <i className="fas fa-star mr-2"></i>
-                  Match Results
+                  Match Results (Latest)
                 </h5>
               </div>
               <div className="card-body">
-                {matches.length === 0 ? (
-                  <p className="text-muted">No matches yet. Select JD and click “Match Resumes”.</p>
+                {matchResults.length === 0 ? (
+                  <p className="text-muted">
+                    No match results yet. Select JD and click “Match Resumes”.
+                  </p>
                 ) : (
                   <div className="files-list">
-                    {matches.map((m) => (
-                      <div key={m.id} className="file-item">
+                    {matchResults.map((m) => (
+                      <div key={m.resume_id} className="file-item">
                         <div className="file-info">
                           <i className="fas fa-user-check file-icon"></i>
                           <div className="file-details">
-                            <strong>{m.candidate_name || m.resume_filename || "Candidate"}</strong>
+                            <strong>{m.filename}</strong>
                             <small className="text-muted d-block">
-                              Score: {m.score ?? "N/A"} • {m.created_at}
+                              Score: {m.score}% • {m.created_at}
                             </small>
                           </div>
                         </div>
-                        <button className="btn btn-sm btn-outline-primary" onClick={() => alert(m.reason || "No reason")}>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => alert(JSON.stringify(m, null, 2))}
+                        >
+                          Details
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ Match History */}
+          <div className="col-12 mb-4">
+            <div className="card files-card">
+              <div className="card-header">
+                <h5 className="card-title mb-0">
+                  <i className="fas fa-history mr-2"></i>
+                  Match History
+                </h5>
+              </div>
+              <div className="card-body">
+                {myMatches.length === 0 ? (
+                  <p className="text-muted">No match history yet.</p>
+                ) : (
+                  <div className="files-list">
+                    {myMatches.map((h) => (
+                      <div key={h.id} className="file-item">
+                        <div className="file-info">
+                          <i className="fas fa-list file-icon"></i>
+                          <div className="file-details">
+                            <strong>{h.profile}</strong>
+                            <small className="text-muted d-block">{h.created_at}</small>
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => alert(JSON.stringify(h.results || [], null, 2))}
+                        >
                           Details
                         </button>
                       </div>
@@ -518,6 +434,59 @@ function Home() {
 
         </div>
       </div>
+
+      {/* ✅ Preview Modal */}
+      {previewOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              width: "min(900px, 95vw)",
+              maxHeight: "85vh",
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid #eee",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <strong>Preview: {previewResume.filename}</strong>
+              <button className="btn btn-sm btn-danger" onClick={() => setPreviewOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ padding: 16, overflow: "auto", maxHeight: "75vh" }}>
+              {previewLoading ? (
+                <p>Loading preview...</p>
+              ) : (
+                <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {previewResume.text || "No text extracted."}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

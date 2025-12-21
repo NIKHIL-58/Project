@@ -389,3 +389,24 @@ async def my_matches(username: str = Depends(get_current_username)):
             "results": m.get("results", []),
         })
     return {"items": items}
+
+from bson import ObjectId
+from fastapi import HTTPException, Depends
+
+@app.get("/resume-text/{resume_id}")
+async def resume_text(resume_id: str, username: str = Depends(get_current_username)):
+    try:
+        rid = ObjectId(resume_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid resume_id")
+
+    r = await db.resumes.find_one({"_id": rid, "username": username})
+    if not r:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    return {
+        "id": str(r["_id"]),
+        "filename": r.get("filename"),
+        "text": r.get("text", ""),
+        "created_at": str(r.get("created_at")),
+    }
