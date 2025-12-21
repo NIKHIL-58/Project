@@ -1,17 +1,17 @@
-// ✅ src/pages/GenerateJD.js  (FINAL - Correct)
+// src/pages/GenerateJD.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { generateJD, saveJD } from "../api"; // ✅ saveJD used
-import "./Home.css"; // optional
+import { generateJD, saveJD } from "../api";
+import "./Home.css";
 
 function GenerateJD() {
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState("Software Engineer");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [jd, setJd] = useState("");
 
-  // ✅ 4-5 profile suggestions
   const suggestions = [
     "Software Engineer",
     "E-commerce Operations Executive",
@@ -24,38 +24,31 @@ function GenerateJD() {
     setLoading(true);
     try {
       const res = await generateJD(profile);
-      setJd(res.data.job_description || "");
+      setJd(res?.data?.job_description || "");
     } catch (err) {
       console.error(err);
-      alert("❌ JD generate failed. Backend error / OpenAI config check karo.");
+      alert("❌ JD generate failed. Backend / OpenAI config check karo.");
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ अब DB में save होगा (JWT token headers api.js में handle होंगे)
   const handleSave = async () => {
+    setSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("❌ Token missing. Please login again.");
-        navigate("/login");
-        return;
-      }
-
       if (!jd.trim()) {
         alert("❌ JD empty hai, pehle generate karo.");
         return;
       }
 
-      // ✅ IMPORTANT: username pass nahi karna
       await saveJD(profile, jd);
-
       alert("✅ JD saved permanently!");
       navigate("/home");
     } catch (err) {
       console.error(err);
       alert("❌ JD save failed (backend error).");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -95,7 +88,7 @@ function GenerateJD() {
         <label className="form-label fw-bold">Edit JD</label>
         <textarea
           className="form-control"
-          rows={12}
+          rows={14}
           value={jd}
           onChange={(e) => setJd(e.target.value)}
           placeholder="JD will appear here..."
@@ -104,9 +97,9 @@ function GenerateJD() {
         <button
           className="btn btn-success mt-3"
           onClick={handleSave}
-          disabled={!jd.trim()}
+          disabled={saving || !jd.trim()}
         >
-          Save JD
+          {saving ? "Saving..." : "Save JD"}
         </button>
       </div>
     </div>

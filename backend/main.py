@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from datetime import timedelta, datetime
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 import os
 from bson import ObjectId
+
+from jose import jwt
 
 from auth import create_access_token, get_password_hash, verify_password, SECRET_KEY, ALGORITHM
 from models import User
@@ -15,13 +17,9 @@ from database import db
 from openai import OpenAI
 
 # Resume parsing
-import fitz  # pymupdf
+import fitz  # PyMuPDF
 import docx  # python-docx
-
-# Matching
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
+import io
 
 # -------------------------
 # App + CORS
@@ -50,14 +48,11 @@ client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # -------------------------
 # JWT (Protect Routes)
 # -------------------------
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # token comes from /login
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # token from /login
+
 
 def decode_token(token: str) -> str:
-    """
-    Returns username from JWT token, or raises 401
-    """
     try:
-        from jose import jwt
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         if not username:
@@ -65,6 +60,7 @@ def decode_token(token: str) -> str:
         return username
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 
 async def get_current_username(token: str = Depends(oauth2_scheme)) -> str:
     return decode_token(token)
@@ -76,13 +72,16 @@ async def get_current_username(token: str = Depends(oauth2_scheme)) -> str:
 class JDRequest(BaseModel):
     profile: str
 
+
 class SaveJDRequest(BaseModel):
     profile: str
     jd_text: str
 
+
 class MatchRequest(BaseModel):
     jd_id: str
     top_k: int = 5
+
 
 # -------------------------
 # Root
@@ -171,7 +170,7 @@ Make it hiring-ready and structured.
 
 
 # -------------------------
-# Save JD (PROTECTED)  + My JDs (PROTECTED)
+# Save JD + My JDs (PROTECTED)
 # -------------------------
 @app.post("/save-jd")
 async def save_jd(data: SaveJDRequest, username: str = Depends(get_current_username)):
@@ -203,31 +202,32 @@ async def my_jds(username: str = Depends(get_current_username)):
 # Resume Upload (PROTECTED)
 # -------------------------
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    text_parts = []
+    parts = []
     with fitz.open(stream=file_bytes, filetype="pdf") as doc:
         for page in doc:
-            text_parts.append(page.get_text("text"))
-    return "\n".join(text_parts).strip()
+            parts.append(page.get_text("text"))
+    return "\n".join(parts).strip()
+
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
-    # python-docx needs a file-like object
-    import io
     f = io.BytesIO(file_bytes)
     d = docx.Document(f)
     return "\n".join([p.text for p in d.paragraphs]).strip()
+
 
 @app.post("/upload-resume")
 async def upload_resume(
     file: UploadFile = File(...),
     username: str = Depends(get_current_username)
 ):
-    filename = (file.filename or "").lower()
+    filename = (file.filename or "")
+    low = filename.lower()
     content = await file.read()
 
-    if filename.endswith(".pdf"):
+    if low.endswith(".pdf"):
         text = extract_text_from_pdf(content)
         file_type = "pdf"
-    elif filename.endswith(".docx"):
+    elif low.endswith(".docx"):
         text = extract_text_from_docx(content)
         file_type = "docx"
     else:
@@ -238,7 +238,7 @@ async def upload_resume(
 
     doc = {
         "username": username,
-        "filename": file.filename,
+        "filename": filename,
         "file_type": file_type,
         "text": text,
         "created_at": datetime.utcnow(),
@@ -257,25 +257,82 @@ async def my_resumes(username: str = Depends(get_current_username)):
             "filename": r.get("filename"),
             "file_type": r.get("file_type"),
             "created_at": str(r.get("created_at")),
+            # optional preview (front-end alert के लिए)
+            "text_preview": (r.get("text") or "")[:800]
         })
     return {"items": items}
 
 
 # -------------------------
-# Match Resumes against a JD (PROTECTED)
+# Matching (Pure Python TF-IDF + Cosine) - NO sklearn
 # -------------------------
+import re
+import math
+from collections import Counter, defaultdict
+
+_STOPWORDS = set("""
+a an the and or but if then else when while of to in on for with without from by as at is are was were be been being
+this that these those it its we you they he she his her them our your their
+""".split())
+
+def _tokenize(text: str) -> List[str]:
+    text = (text or "").lower()
+    words = re.findall(r"[a-z0-9]+", text)
+    return [w for w in words if w not in _STOPWORDS and len(w) > 2]
+
+def _tfidf_vectors(corpus: List[str]) -> List[dict]:
+    tokenized = [_tokenize(t) for t in corpus]
+    df = defaultdict(int)
+    for toks in tokenized:
+        for w in set(toks):
+            df[w] += 1
+
+    N = len(corpus)
+    idf = {w: math.log((N + 1) / (dfw + 1)) + 1 for w, dfw in df.items()}
+
+    vectors = []
+    for toks in tokenized:
+        tf = Counter(toks)
+        vec = {}
+        if not tf:
+            vectors.append(vec)
+            continue
+        max_tf = max(tf.values())
+        for w, c in tf.items():
+            vec[w] = (c / max_tf) * idf.get(w, 0.0)
+        vectors.append(vec)
+    return vectors
+
+def _cosine(v1: dict, v2: dict) -> float:
+    if not v1 or not v2:
+        return 0.0
+    # dot
+    dot = 0.0
+    # iterate smaller dict
+    if len(v1) > len(v2):
+        v1, v2 = v2, v1
+    for k, val in v1.items():
+        dot += val * v2.get(k, 0.0)
+    # norms
+    n1 = math.sqrt(sum(x*x for x in v1.values()))
+    n2 = math.sqrt(sum(x*x for x in v2.values()))
+    if n1 == 0.0 or n2 == 0.0:
+        return 0.0
+    return dot / (n1 * n2)
+
 def compute_scores(jd_text: str, resume_texts: List[str]) -> List[float]:
     corpus = [jd_text] + resume_texts
-    vectorizer = TfidfVectorizer(stop_words="english")
-    X = vectorizer.fit_transform(corpus)
-    jd_vec = X[0:1]
-    res_vecs = X[1:]
-    sims = cosine_similarity(jd_vec, res_vecs)[0]  # array
-    return sims.tolist()
+    vecs = _tfidf_vectors(corpus)
+    jd_vec = vecs[0]
+    res_vecs = vecs[1:]
+    return [_cosine(jd_vec, rv) for rv in res_vecs]
 
+
+# -------------------------
+# Match Resumes against a JD (PROTECTED)
+# -------------------------
 @app.post("/match-resumes")
 async def match_resumes(payload: MatchRequest, username: str = Depends(get_current_username)):
-    # get JD
     try:
         jd_obj_id = ObjectId(payload.jd_id)
     except Exception:
@@ -285,7 +342,6 @@ async def match_resumes(payload: MatchRequest, username: str = Depends(get_curre
     if not jd:
         raise HTTPException(status_code=404, detail="JD not found")
 
-    # get resumes
     resumes_cursor = db.resumes.find({"username": username}).sort("created_at", -1)
     resumes = []
     async for r in resumes_cursor:
@@ -301,7 +357,7 @@ async def match_resumes(payload: MatchRequest, username: str = Depends(get_curre
         scored.append({
             "resume_id": str(r["_id"]),
             "filename": r.get("filename"),
-            "score": round(float(s) * 100, 2),  # percentage
+            "score": round(float(s) * 100, 2),
             "created_at": str(r.get("created_at")),
         })
 
@@ -309,7 +365,6 @@ async def match_resumes(payload: MatchRequest, username: str = Depends(get_curre
     top_k = max(1, min(payload.top_k, 50))
     top_items = scored[:top_k]
 
-    # save match result (optional)
     await db.matches.insert_one({
         "username": username,
         "jd_id": payload.jd_id,
