@@ -215,36 +215,53 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     return "\n".join([p.text for p in d.paragraphs]).strip()
 
 
-@app.post("/upload-resume")
-async def upload_resume(
-    file: UploadFile = File(...),
+@app.post("/upload-resumes")
+async def upload_resumes(
+    files: List[UploadFile] = File(...),
     username: str = Depends(get_current_username)
 ):
-    filename = (file.filename or "")
-    low = filename.lower()
-    content = await file.read()
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="No files received")
 
-    if low.endswith(".pdf"):
-        text = extract_text_from_pdf(content)
-        file_type = "pdf"
-    elif low.endswith(".docx"):
-        text = extract_text_from_docx(content)
-        file_type = "docx"
-    else:
-        raise HTTPException(status_code=400, detail="Only PDF or DOCX allowed")
+    inserted_ids = []
+    skipped = 0
 
-    if not text or len(text) < 50:
-        raise HTTPException(status_code=400, detail="Could not extract enough text from resume")
+    for file in files:
+        filename = (file.filename or "")
+        low = filename.lower()
+        content = await file.read()
 
-    doc = {
-        "username": username,
-        "filename": filename,
-        "file_type": file_type,
-        "text": text,
-        "created_at": datetime.utcnow(),
+        if low.endswith(".pdf"):
+            text = extract_text_from_pdf(content)
+            file_type = "pdf"
+        elif low.endswith(".docx"):
+            text = extract_text_from_docx(content)
+            file_type = "docx"
+        else:
+            skipped += 1
+            continue
+
+        if not text or len(text) < 50:
+            skipped += 1
+            continue
+
+        doc = {
+            "username": username,
+            "filename": filename,
+            "file_type": file_type,
+            "text": text,
+            "created_at": datetime.utcnow(),
+        }
+        result = await db.resumes.insert_one(doc)
+        inserted_ids.append(str(result.inserted_id))
+
+    return {
+        "message": "Upload finished",
+        "uploaded_count": len(inserted_ids),
+        "skipped": skipped,
+        "resume_ids": inserted_ids,
     }
-    result = await db.resumes.insert_one(doc)
-    return {"message": "Resume uploaded", "resume_id": str(result.inserted_id)}
+
 
 
 @app.get("/my-resumes")

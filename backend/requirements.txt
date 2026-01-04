@@ -13,3 +13,5 @@ pymupdf
 python-docx
 scikit-learn
 numpy
+pymupdf
+python-docx

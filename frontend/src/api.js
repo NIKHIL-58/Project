@@ -4,8 +4,6 @@ const API_URL = "https://smarthire-backend-acen.onrender.com";
 
 const authHeader = () => {
   const token = localStorage.getItem("token");
-  // ✅ token nahi hai to empty headers bhejo
-  if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 };
 
@@ -24,31 +22,32 @@ export const saveJD = (profile, jd_text) =>
 export const getMyJDs = () =>
   axios.get(`${API_URL}/my-jds`, { headers: authHeader() });
 
+/* ✅ OLD (single resume upload) - keep it */
 export const uploadResume = (file) => {
   const form = new FormData();
   form.append("file", file);
-
   return axios.post(`${API_URL}/upload-resume`, form, {
-    headers: {
-      ...authHeader(),
-      "Content-Type": "multipart/form-data",
-    },
+    headers: { ...authHeader(), "Content-Type": "multipart/form-data" },
+  });
+};
+
+/* ✅ NEW (multiple resume upload) */
+export const uploadResumes = (files) => {
+  const form = new FormData();
+  files.forEach((f) => form.append("files", f));
+  return axios.post(`${API_URL}/upload-resumes`, form, {
+    headers: { ...authHeader(), "Content-Type": "multipart/form-data" },
   });
 };
 
 export const getMyResumes = () =>
   axios.get(`${API_URL}/my-resumes`, { headers: authHeader() });
 
-export const matchResumes = (jd_id, top_k = 5) =>
-  axios.post(
-    `${API_URL}/match-resumes`,
-    { jd_id, top_k },
-    { headers: authHeader() }
-  );
-
-export const getMyMatches = () =>
-  axios.get(`${API_URL}/my-matches`, { headers: authHeader() });
-
 export const getResumeText = (resume_id) =>
   axios.get(`${API_URL}/resume-text/${resume_id}`, { headers: authHeader() });
 
+export const matchResumes = (jd_id, top_k = 5) =>
+  axios.post(`${API_URL}/match-resumes`, { jd_id, top_k }, { headers: authHeader() });
+
+export const getMyMatches = () =>
+  axios.get(`${API_URL}/my-matches`, { headers: authHeader() });

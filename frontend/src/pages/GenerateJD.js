@@ -13,12 +13,14 @@ function GenerateJD() {
   const [jd, setJd] = useState("");
 
   const suggestions = [
-    "Software Engineer",
-    "E-commerce Operations Executive",
-    "Data Analyst",
-    "Digital Marketing Specialist",
-    "HR Recruiter",
-  ];
+  "Software Engineer",
+  "E-commerce Operations Executive",
+  "Data Analyst",
+  "Digital Marketing Specialist",
+  "Performance Marketing Specialist", // ✅ add
+  "HR Recruiter",
+];
+
 
   const handleGenerate = async () => {
     setLoading(true);

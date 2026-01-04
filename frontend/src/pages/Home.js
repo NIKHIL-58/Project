@@ -1,13 +1,12 @@
-// src/pages/Home.js
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getMyJDs,
-  uploadResume,
+  uploadResumes,     // ✅ NEW
   getMyResumes,
   matchResumes,
   getMyMatches,
-  getResumeText, // ✅ add
+  getResumeText,
 } from "../api";
 import "./Home.css";
 
@@ -20,8 +19,8 @@ function Home() {
   const [savedJDs, setSavedJDs] = useState([]);
   const [selectedJDId, setSelectedJDId] = useState("");
 
-  // Resume upload (permanent)
-  const [resumeFile, setResumeFile] = useState(null);
+  // ✅ Multiple Resume upload
+  const [resumeFiles, setResumeFiles] = useState([]); // array
   const [myResumes, setMyResumes] = useState([]);
   const [loadingResume, setLoadingResume] = useState(false);
 
@@ -48,7 +47,12 @@ function Home() {
 
       const jds = jdsRes?.data?.items || [];
       setSavedJDs(jds);
-      if (jds.length > 0) setSelectedJDId((prev) => prev || jds[0].id);
+
+      if (jds.length > 0) {
+        setSelectedJDId((prev) => prev || jds[0].id);
+      } else {
+        setSelectedJDId("");
+      }
 
       setMyResumes(resumesRes?.data?.items || []);
       setMyMatches(matchesRes?.data?.items || []);
@@ -102,23 +106,30 @@ function Home() {
   };
 
   // -------------------------
-  // Resume Upload (Permanent)
+  // ✅ Multiple Resume Pick
   // -------------------------
   const handleResumePick = (e) => {
-    const f = e.target.files?.[0];
-    if (f) setResumeFile(f);
+    const files = Array.from(e.target.files || []);
+    if (files.length) setResumeFiles(files);
   };
 
+  // -------------------------
+  // ✅ Multiple Resume Upload (Permanent)
+  // -------------------------
   const handleResumeUpload = async () => {
-    if (!resumeFile) {
-      alert("❌ Please choose a PDF/DOCX resume first.");
+    if (!resumeFiles.length) {
+      alert("❌ Please choose PDF/DOCX resumes first.");
       return;
     }
+
     setLoadingResume(true);
     try {
-      await uploadResume(resumeFile);
-      alert("✅ Resume uploaded permanently!");
-      setResumeFile(null);
+      const res = await uploadResumes(resumeFiles);
+      alert(`✅ Uploaded ${res?.data?.uploaded_count || resumeFiles.length} resumes permanently!`);
+      setResumeFiles([]);
+      // reset input value (optional)
+      const input = document.getElementById("resumeMultiInput");
+      if (input) input.value = "";
       await fetchAll();
     } catch (err) {
       console.error(err);
@@ -222,14 +233,12 @@ function Home() {
                   <i className="fas fa-hand-sparkles mr-2"></i>
                   Welcome back, {username}!
                 </h2>
-                <p className="welcome-subtitle">
-                  Here's what's happening with your account today
-                </p>
+                <p className="welcome-subtitle">Here's what's happening with your account today</p>
               </div>
             </div>
           </div>
 
-          {/* ✅ Saved JDs + Match */}
+          {/* Saved JDs + Match */}
           <div className="col-12 mb-4">
             <div className="card files-card">
               <div className="card-header d-flex justify-content-between align-items-center">
@@ -304,24 +313,42 @@ function Home() {
             </div>
           </div>
 
-          {/* ✅ Resume Upload Permanent (Only this one kept) */}
+          {/* ✅ Resume Upload Permanent (MULTIPLE) */}
           <div className="col-12 mb-4">
             <div className="card upload-card">
               <div className="card-header">
                 <h5 className="card-title mb-0">
                   <i className="fas fa-upload mr-2"></i>
-                  Resume Upload (Permanent)
+                  Resume Upload (Permanent) - Multiple
                 </h5>
               </div>
 
               <div className="card-body">
-                <input type="file" className="form-control" onChange={handleResumePick} />
+                <input
+                  id="resumeMultiInput"
+                  type="file"
+                  className="form-control"
+                  accept=".pdf,.docx"
+                  multiple
+                  onChange={handleResumePick}
+                />
+
+                {resumeFiles.length > 0 && (
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      Selected {resumeFiles.length} file(s):{" "}
+                      {resumeFiles.slice(0, 3).map((f) => f.name).join(", ")}
+                      {resumeFiles.length > 3 ? " ..." : ""}
+                    </small>
+                  </div>
+                )}
+
                 <button
                   className="btn btn-success mt-3"
                   onClick={handleResumeUpload}
                   disabled={loadingResume}
                 >
-                  {loadingResume ? "Uploading..." : "Upload Resume"}
+                  {loadingResume ? "Uploading..." : "Upload Resumes"}
                 </button>
 
                 <hr />
@@ -354,7 +381,7 @@ function Home() {
             </div>
           </div>
 
-          {/* ✅ Match Results (Latest) */}
+          {/* Match Results (Latest) */}
           <div className="col-12 mb-4">
             <div className="card files-card">
               <div className="card-header">
@@ -395,7 +422,7 @@ function Home() {
             </div>
           </div>
 
-          {/* ✅ Match History */}
+          {/* Match History */}
           <div className="col-12 mb-4">
             <div className="card files-card">
               <div className="card-header">
@@ -431,11 +458,10 @@ function Home() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* ✅ Preview Modal */}
+      {/* Preview Modal */}
       {previewOpen && (
         <div
           style={{
