@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getMyJDs,
-  uploadResumes,     // ✅ NEW
+  uploadResumes,
   getMyResumes,
   matchResumes,
   getMyMatches,
@@ -15,27 +15,33 @@ function Home() {
 
   const [username, setUsername] = useState("");
 
-  // JDs
   const [savedJDs, setSavedJDs] = useState([]);
   const [selectedJDId, setSelectedJDId] = useState("");
 
-  // ✅ Multiple Resume upload
-  const [resumeFiles, setResumeFiles] = useState([]); // array
+  const [resumeFiles, setResumeFiles] = useState([]);
   const [myResumes, setMyResumes] = useState([]);
-  const [loadingResume, setLoadingResume] = useState(false);
 
-  // Matching
   const [matchResults, setMatchResults] = useState([]);
   const [myMatches, setMyMatches] = useState([]);
-  const [loadingMatch, setLoadingMatch] = useState(false);
 
-  // Resume Preview Modal
+  const [loadingResume, setLoadingResume] = useState(false);
+  const [loadingMatch, setLoadingMatch] = useState(false);
+  const [status, setStatus] = useState({ type: "", message: "" });
+
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewResume, setPreviewResume] = useState({ filename: "", text: "" });
+  const [previewResume, setPreviewResume] = useState({
+    filename: "",
+    text: "",
+  });
 
-  const safeMsg = (err, fallback = "No reason") =>
+  const safeMsg = (err, fallback = "Something went wrong") =>
     err?.response?.data?.detail || err?.message || fallback;
+
+  const showStatus = (type, message) => {
+    setStatus({ type, message });
+    setTimeout(() => setStatus({ type: "", message: "" }), 4000);
+  };
 
   const fetchAll = async () => {
     try {
@@ -59,8 +65,10 @@ function Home() {
     } catch (err) {
       console.error(err);
       if (err?.response?.status === 401) {
-        alert("Session expired. Please login again.");
+        showStatus("error", "Session expired. Please login again.");
         navigate("/login");
+      } else {
+        showStatus("error", safeMsg(err, "Failed to load dashboard data"));
       }
     }
   };
@@ -86,9 +94,6 @@ function Home() {
     navigate("/login");
   };
 
-  // -------------------------
-  // JD Download (TXT)
-  // -------------------------
   const downloadJD = (jd) => {
     const content = `PROFILE: ${jd.profile}\nCREATED_AT: ${jd.created_at}\n\n${jd.jd_text || ""}`;
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -105,43 +110,40 @@ function Home() {
     URL.revokeObjectURL(url);
   };
 
-  // -------------------------
-  // ✅ Multiple Resume Pick
-  // -------------------------
   const handleResumePick = (e) => {
     const files = Array.from(e.target.files || []);
-    if (files.length) setResumeFiles(files);
+    setResumeFiles(files);
   };
 
-  // -------------------------
-  // ✅ Multiple Resume Upload (Permanent)
-  // -------------------------
   const handleResumeUpload = async () => {
     if (!resumeFiles.length) {
-      alert("❌ Please choose PDF/DOCX resumes first.");
+      showStatus("error", "Please choose PDF or DOCX resumes first.");
       return;
     }
 
     setLoadingResume(true);
+
     try {
       const res = await uploadResumes(resumeFiles);
-      alert(`✅ Uploaded ${res?.data?.uploaded_count || resumeFiles.length} resumes permanently!`);
+      showStatus(
+        "success",
+        `Uploaded ${res?.data?.uploaded_count || resumeFiles.length} resume(s) successfully.`
+      );
+
       setResumeFiles([]);
-      // reset input value (optional)
+
       const input = document.getElementById("resumeMultiInput");
       if (input) input.value = "";
+
       await fetchAll();
     } catch (err) {
       console.error(err);
-      alert(`❌ ${safeMsg(err, "Resume upload failed")}`);
+      showStatus("error", safeMsg(err, "Resume upload failed"));
     } finally {
       setLoadingResume(false);
     }
   };
 
-  // -------------------------
-  // Resume Preview (Modal)
-  // -------------------------
   const openPreview = async (resume_id) => {
     setPreviewOpen(true);
     setPreviewLoading(true);
@@ -155,364 +157,443 @@ function Home() {
       });
     } catch (err) {
       console.error(err);
-      alert(`❌ ${safeMsg(err, "Preview failed")}`);
+      showStatus("error", safeMsg(err, "Preview failed"));
       setPreviewOpen(false);
     } finally {
       setPreviewLoading(false);
     }
   };
 
-  // -------------------------
-  // Match Resumes
-  // -------------------------
   const handleMatch = async () => {
     if (!selectedJDId) {
-      alert("❌ Please select a JD first.");
+      showStatus("error", "Please select a job description first.");
+      return;
+    }
+
+    if (!myResumes.length) {
+      showStatus("error", "Please upload resumes before matching.");
       return;
     }
 
     setLoadingMatch(true);
+
     try {
-      const res = await matchResumes(selectedJDId, 5);
+      const res = await matchResumes(selectedJDId, 10);
       setMatchResults(res?.data?.items || []);
-      alert("✅ Matching done!");
+      showStatus("success", "AI matching completed successfully.");
       await fetchAll();
     } catch (err) {
       console.error(err);
-      alert(`❌ ${safeMsg(err, "Match failed")}`);
+      showStatus("error", safeMsg(err, "Match failed"));
     } finally {
       setLoadingMatch(false);
     }
   };
 
+  const getScoreLabel = (score) => {
+    if (score >= 80) return "Strong fit";
+    if (score >= 60) return "Good fit";
+    return "Needs review";
+  };
+
+  const getScoreClass = (score) => {
+    if (score >= 80) return "score-high";
+    if (score >= 60) return "score-medium";
+    return "score-low";
+  };
+
+  const selectedJD = savedJDs.find((jd) => jd.id === selectedJDId);
+
   return (
-    <div className="home-container">
-      {/* Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div className="container-fluid">
-          <a className="navbar-brand" href="/home">
-            <i className="fas fa-home mr-2"></i>
-            Dashboard
-          </a>
-
-          <div className="collapse navbar-collapse" id="navbarNav">
-            <ul className="navbar-nav ml-auto">
-              <li className="nav-item">
-                <span className="navbar-text text-white mr-3">
-                  <i className="fas fa-user-circle mr-2"></i>
-                  {username}
-                </span>
-              </li>
-              <li className="nav-item">
-                <button className="btn btn-outline-light" onClick={handleLogout}>
-                  <i className="fas fa-sign-out-alt mr-2"></i>
-                  Logout
-                </button>
-              </li>
-            </ul>
+    <div className="smart-dashboard">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">S</div>
+          <div>
+            <h3>SmartHire</h3>
+            <span>AI Resume Screening</span>
           </div>
         </div>
-      </nav>
 
-      {/* Main Content */}
-      <div className="container-fluid mt-4">
-        <div className="row">
-          {/* Generate JD */}
-          <div className="col-12 mb-4">
-            <button className="btn btn-primary" onClick={() => navigate("/generate-jd")}>
-              <i className="fas fa-plus mr-2"></i>
-              Generate Job Description
-            </button>
+        <div className="side-menu">
+          <button className="side-link active">Dashboard</button>
+          <button className="side-link" onClick={() => navigate("/generate-jd")}>
+            Generate JD
+          </button>
+          <button className="side-link">Resume Bank</button>
+          <button className="side-link">Match History</button>
+        </div>
+
+        <button className="logout-btn" onClick={handleLogout}>
+          Logout
+        </button>
+      </aside>
+
+      <main className="main-panel">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Welcome back</p>
+            <h1>Hi, {username}</h1>
+            <p className="subtitle">
+              Screen resumes, rank candidates, and shortlist the best talent faster.
+            </p>
           </div>
 
-          {/* Welcome */}
-          <div className="col-12 mb-4">
-            <div className="card welcome-card">
-              <div className="card-body">
-                <h2 className="welcome-title">
-                  <i className="fas fa-hand-sparkles mr-2"></i>
-                  Welcome back, {username}!
-                </h2>
-                <p className="welcome-subtitle">Here's what's happening with your account today</p>
-              </div>
+          <button className="primary-btn" onClick={() => navigate("/generate-jd")}>
+            + Generate Job Description
+          </button>
+        </header>
+
+        {status.message && (
+          <div className={`status-banner ${status.type}`}>
+            {status.message}
+          </div>
+        )}
+
+        <section className="stats-grid">
+          <div className="stat-card">
+            <span>Job Descriptions</span>
+            <strong>{savedJDs.length}</strong>
+            <p>Structured roles created</p>
+          </div>
+
+          <div className="stat-card">
+            <span>Uploaded Resumes</span>
+            <strong>{myResumes.length}</strong>
+            <p>Candidate profiles stored</p>
+          </div>
+
+          <div className="stat-card">
+            <span>Match Runs</span>
+            <strong>{myMatches.length}</strong>
+            <p>AI screening sessions</p>
+          </div>
+
+          <div className="stat-card highlight">
+            <span>Latest Results</span>
+            <strong>{matchResults.length}</strong>
+            <p>Shortlisted candidates</p>
+          </div>
+        </section>
+
+        <section className="workflow-card">
+          <div className="workflow-step">
+            <div className="step-number">1</div>
+            <div>
+              <h4>Create JD</h4>
+              <p>Generate role-specific requirements.</p>
             </div>
           </div>
 
-          {/* Saved JDs + Match */}
-          <div className="col-12 mb-4">
-            <div className="card files-card">
-              <div className="card-header d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-briefcase mr-2"></i>
-                  Saved Job Descriptions
-                </h5>
+          <div className="workflow-line" />
 
-                <div className="d-flex gap-2 align-items-center" style={{ minWidth: 340 }}>
-                  <select
-                    className="form-control"
-                    value={selectedJDId}
-                    onChange={(e) => setSelectedJDId(e.target.value)}
-                  >
-                    {savedJDs.length === 0 ? (
-                      <option value="">No JDs</option>
-                    ) : (
-                      savedJDs.map((jd) => (
-                        <option key={jd.id} value={jd.id}>
-                          {jd.profile}
-                        </option>
-                      ))
-                    )}
-                  </select>
+          <div className="workflow-step">
+            <div className="step-number">2</div>
+            <div>
+              <h4>Upload Resumes</h4>
+              <p>Add PDF or DOCX candidate resumes.</p>
+            </div>
+          </div>
 
-                  <button
-                    className="btn btn-success"
-                    onClick={handleMatch}
-                    disabled={loadingMatch || savedJDs.length === 0}
-                  >
-                    {loadingMatch ? "Matching..." : "Match Resumes"}
-                  </button>
-                </div>
+          <div className="workflow-line" />
+
+          <div className="workflow-step">
+            <div className="step-number">3</div>
+            <div>
+              <h4>Match Candidates</h4>
+              <p>Rank candidates using AI scoring.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="content-grid">
+          <div className="panel-card large">
+            <div className="panel-header">
+              <div>
+                <h2>Job Descriptions</h2>
+                <p>Select a JD to match against your resume bank.</p>
               </div>
+            </div>
 
-              <div className="card-body">
+            <div className="jd-action-row">
+              <select
+                className="smart-select"
+                value={selectedJDId}
+                onChange={(e) => setSelectedJDId(e.target.value)}
+              >
                 {savedJDs.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-muted">No JDs saved yet</p>
-                  </div>
+                  <option value="">No job descriptions available</option>
                 ) : (
-                  <div className="files-list">
-                    {savedJDs.map((jd) => (
-                      <div key={jd.id} className="file-item">
-                        <div className="file-info">
-                          <i className="fas fa-file-alt file-icon"></i>
-                          <div className="file-details">
-                            <strong>{jd.profile}</strong>
-                            <small className="text-muted d-block">{jd.created_at}</small>
-                          </div>
-                        </div>
-
-                        <div className="d-flex gap-2">
-                          <button
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => alert(jd.jd_text)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-success"
-                            onClick={() => downloadJD(jd)}
-                          >
-                            Download
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  savedJDs.map((jd) => (
+                    <option key={jd.id} value={jd.id}>
+                      {jd.profile}
+                    </option>
+                  ))
                 )}
-              </div>
-            </div>
-          </div>
+              </select>
 
-          {/* ✅ Resume Upload Permanent (MULTIPLE) */}
-          <div className="col-12 mb-4">
-            <div className="card upload-card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-upload mr-2"></i>
-                  Resume Upload (Permanent) - Multiple
-                </h5>
-              </div>
-
-              <div className="card-body">
-                <input
-                  id="resumeMultiInput"
-                  type="file"
-                  className="form-control"
-                  accept=".pdf,.docx"
-                  multiple
-                  onChange={handleResumePick}
-                />
-
-                {resumeFiles.length > 0 && (
-                  <div className="mt-2">
-                    <small className="text-muted">
-                      Selected {resumeFiles.length} file(s):{" "}
-                      {resumeFiles.slice(0, 3).map((f) => f.name).join(", ")}
-                      {resumeFiles.length > 3 ? " ..." : ""}
-                    </small>
-                  </div>
-                )}
-
-                <button
-                  className="btn btn-success mt-3"
-                  onClick={handleResumeUpload}
-                  disabled={loadingResume}
-                >
-                  {loadingResume ? "Uploading..." : "Upload Resumes"}
-                </button>
-
-                <hr />
-
-                <h5 className="mb-3">My Resumes</h5>
-                {myResumes.length === 0 ? (
-                  <p className="text-muted">No resumes uploaded yet</p>
-                ) : (
-                  <div className="files-list">
-                    {myResumes.map((r) => (
-                      <div key={r.id} className="file-item">
-                        <div className="file-info">
-                          <i className="fas fa-file-pdf file-icon"></i>
-                          <div className="file-details">
-                            <strong>{r.filename}</strong>
-                            <small className="text-muted d-block">{r.created_at}</small>
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => openPreview(r.id)}
-                        >
-                          Preview
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Match Results (Latest) */}
-          <div className="col-12 mb-4">
-            <div className="card files-card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-star mr-2"></i>
-                  Match Results (Latest)
-                </h5>
-              </div>
-              <div className="card-body">
-                {matchResults.length === 0 ? (
-                  <p className="text-muted">
-                    No match results yet. Select JD and click “Match Resumes”.
-                  </p>
-                ) : (
-                  <div className="files-list">
-                    {matchResults.map((m) => (
-                      <div key={m.resume_id} className="file-item">
-                        <div className="file-info">
-                          <i className="fas fa-user-check file-icon"></i>
-                          <div className="file-details">
-                            <strong>{m.filename}</strong>
-                            <small className="text-muted d-block">
-                              Score: {m.score}% • {m.created_at}
-                            </small>
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => alert(JSON.stringify(m, null, 2))}
-                        >
-                          Details
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Match History */}
-          <div className="col-12 mb-4">
-            <div className="card files-card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-history mr-2"></i>
-                  Match History
-                </h5>
-              </div>
-              <div className="card-body">
-                {myMatches.length === 0 ? (
-                  <p className="text-muted">No match history yet.</p>
-                ) : (
-                  <div className="files-list">
-                    {myMatches.map((h) => (
-                      <div key={h.id} className="file-item">
-                        <div className="file-info">
-                          <i className="fas fa-list file-icon"></i>
-                          <div className="file-details">
-                            <strong>{h.profile}</strong>
-                            <small className="text-muted d-block">{h.created_at}</small>
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => alert(JSON.stringify(h.results || [], null, 2))}
-                        >
-                          Details
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Preview Modal */}
-      {previewOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={() => setPreviewOpen(false)}
-        >
-          <div
-            style={{
-              background: "#fff",
-              width: "min(900px, 95vw)",
-              maxHeight: "85vh",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: "12px 16px",
-                borderBottom: "1px solid #eee",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <strong>Preview: {previewResume.filename}</strong>
-              <button className="btn btn-sm btn-danger" onClick={() => setPreviewOpen(false)}>
-                Close
+              <button
+                className="success-btn"
+                onClick={handleMatch}
+                disabled={loadingMatch || !savedJDs.length}
+              >
+                {loadingMatch ? "Matching..." : "Match Resumes"}
               </button>
             </div>
 
-            <div style={{ padding: 16, overflow: "auto", maxHeight: "75vh" }}>
+            {selectedJD && (
+              <div className="selected-jd-card">
+                <div>
+                  <span>Selected Role</span>
+                  <h3>{selectedJD.profile}</h3>
+                  <p>{selectedJD.created_at}</p>
+                </div>
+
+                <div className="button-group">
+                  <button
+                    className="ghost-btn"
+                    onClick={() => setPreviewResume({
+                      filename: selectedJD.profile,
+                      text: selectedJD.jd_text || "No JD text available.",
+                    }) || setPreviewOpen(true)}
+                  >
+                    View
+                  </button>
+
+                  <button className="ghost-btn" onClick={() => downloadJD(selectedJD)}>
+                    Download
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="list-area">
+              {savedJDs.length === 0 ? (
+                <EmptyState
+                  title="No job descriptions yet"
+                  text="Create your first JD to start screening candidates."
+                />
+              ) : (
+                savedJDs.map((jd) => (
+                  <div key={jd.id} className="list-item">
+                    <div className="item-icon blue">JD</div>
+                    <div className="item-info">
+                      <strong>{jd.profile}</strong>
+                      <span>{jd.created_at}</span>
+                    </div>
+                    <button className="mini-btn" onClick={() => downloadJD(jd)}>
+                      Download
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="panel-card">
+            <div className="panel-header">
+              <div>
+                <h2>Upload Resumes</h2>
+                <p>Upload multiple resumes permanently.</p>
+              </div>
+            </div>
+
+            <label className="upload-box" htmlFor="resumeMultiInput">
+              <input
+                id="resumeMultiInput"
+                type="file"
+                accept=".pdf,.docx"
+                multiple
+                onChange={handleResumePick}
+              />
+              <div className="upload-icon">↑</div>
+              <strong>Click to upload resumes</strong>
+              <span>PDF or DOCX files supported</span>
+            </label>
+
+            {resumeFiles.length > 0 && (
+              <div className="selected-files">
+                <strong>{resumeFiles.length} selected</strong>
+                <p>
+                  {resumeFiles.slice(0, 3).map((f) => f.name).join(", ")}
+                  {resumeFiles.length > 3 ? " ..." : ""}
+                </p>
+              </div>
+            )}
+
+            <button
+              className="full-btn"
+              onClick={handleResumeUpload}
+              disabled={loadingResume}
+            >
+              {loadingResume ? "Uploading..." : "Upload Resumes"}
+            </button>
+          </div>
+        </section>
+
+        <section className="content-grid">
+          <div className="panel-card large">
+            <div className="panel-header">
+              <div>
+                <h2>Latest Match Results</h2>
+                <p>Ranked candidates for your selected job description.</p>
+              </div>
+            </div>
+
+            {matchResults.length === 0 ? (
+              <EmptyState
+                title="No latest results"
+                text="Select a JD and click Match Resumes to generate rankings."
+              />
+            ) : (
+              <div className="candidate-list">
+                {matchResults.map((m, index) => (
+                  <div key={m.resume_id || index} className="candidate-card">
+                    <div className="rank">#{index + 1}</div>
+
+                    <div className="candidate-main">
+                      <strong>{m.filename}</strong>
+                      <span>{m.created_at}</span>
+
+                      <div className="score-track">
+                        <div
+                          className={`score-fill ${getScoreClass(m.score)}`}
+                          style={{ width: `${Math.min(Number(m.score || 0), 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="candidate-score">
+                      <strong>{m.score}%</strong>
+                      <span className={`score-badge ${getScoreClass(m.score)}`}>
+                        {getScoreLabel(Number(m.score || 0))}
+                      </span>
+                    </div>
+
+                    <button
+                      className="mini-btn"
+                      onClick={() =>
+                        setPreviewResume({
+                          filename: m.filename,
+                          text: JSON.stringify(m, null, 2),
+                        }) || setPreviewOpen(true)
+                      }
+                    >
+                      Details
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="panel-card">
+            <div className="panel-header">
+              <div>
+                <h2>My Resumes</h2>
+                <p>Recently uploaded candidate files.</p>
+              </div>
+            </div>
+
+            <div className="list-area compact">
+              {myResumes.length === 0 ? (
+                <EmptyState
+                  title="No resumes uploaded"
+                  text="Upload resumes to build your candidate bank."
+                />
+              ) : (
+                myResumes.slice(0, 8).map((r) => (
+                  <div key={r.id} className="list-item">
+                    <div className="item-icon red">CV</div>
+                    <div className="item-info">
+                      <strong>{r.filename}</strong>
+                      <span>{r.created_at}</span>
+                    </div>
+                    <button className="mini-btn" onClick={() => openPreview(r.id)}>
+                      Preview
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="panel-card">
+          <div className="panel-header">
+            <div>
+              <h2>Match History</h2>
+              <p>Previous AI screening runs.</p>
+            </div>
+          </div>
+
+          {myMatches.length === 0 ? (
+            <EmptyState
+              title="No match history"
+              text="Your completed matching sessions will appear here."
+            />
+          ) : (
+            <div className="history-grid">
+              {myMatches.map((h) => (
+                <div key={h.id} className="history-card">
+                  <div>
+                    <span>Role</span>
+                    <strong>{h.profile}</strong>
+                    <p>{h.created_at}</p>
+                  </div>
+
+                  <button
+                    className="mini-btn"
+                    onClick={() =>
+                      setPreviewResume({
+                        filename: h.profile,
+                        text: JSON.stringify(h.results || [], null, 2),
+                      }) || setPreviewOpen(true)
+                    }
+                  >
+                    View Results
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      {previewOpen && (
+        <div className="modal-backdrop" onClick={() => setPreviewOpen(false)}>
+          <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <span>Preview</span>
+                <strong>{previewResume.filename}</strong>
+              </div>
+
+              <button className="close-btn" onClick={() => setPreviewOpen(false)}>
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
               {previewLoading ? (
                 <p>Loading preview...</p>
               ) : (
-                <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {previewResume.text || "No text extracted."}
-                </pre>
+                <pre>{previewResume.text || "No text extracted."}</pre>
               )}
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EmptyState({ title, text }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-icon">✨</div>
+      <strong>{title}</strong>
+      <p>{text}</p>
     </div>
   );
 }

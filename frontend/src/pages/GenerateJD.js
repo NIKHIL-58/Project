@@ -8,101 +8,176 @@ function GenerateJD() {
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState("Software Engineer");
+  const [customProfile, setCustomProfile] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [jd, setJd] = useState("");
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   const suggestions = [
-  "Software Engineer",
-  "E-commerce Operations Executive",
-  "Data Analyst",
-  "Digital Marketing Specialist",
-  "Performance Marketing Specialist", // ✅ add
-  "HR Recruiter",
-];
+    "Software Engineer",
+    "E-commerce Operations Executive",
+    "Data Analyst",
+    "Digital Marketing Specialist",
+    "Performance Marketing Specialist",
+    "HR Recruiter",
+  ];
 
+  const selectedProfile = customProfile.trim() || profile;
+
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+  };
 
   const handleGenerate = async () => {
+    if (!selectedProfile.trim()) {
+      showMessage("error", "Please select or enter a job profile.");
+      return;
+    }
+
     setLoading(true);
+    setMessage({ type: "", text: "" });
+
     try {
-      const res = await generateJD(profile);
+      const res = await generateJD(selectedProfile);
       setJd(res?.data?.job_description || "");
+      showMessage("success", "Job description generated successfully.");
     } catch (err) {
       console.error(err);
-      alert("❌ JD generate failed. Backend / OpenAI config check karo.");
+      showMessage("error", "JD generation failed. Please check backend or OpenAI configuration.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      if (!jd.trim()) {
-        alert("❌ JD empty hai, pehle generate karo.");
-        return;
-      }
+    if (!jd.trim()) {
+      showMessage("error", "JD is empty. Generate or write a JD first.");
+      return;
+    }
 
-      await saveJD(profile, jd);
-      alert("✅ JD saved permanently!");
-      navigate("/home");
+    setSaving(true);
+    setMessage({ type: "", text: "" });
+
+    try {
+      await saveJD(selectedProfile, jd);
+      showMessage("success", "Job description saved successfully.");
+      setTimeout(() => navigate("/home"), 900);
     } catch (err) {
       console.error(err);
-      alert("❌ JD save failed (backend error).");
+      showMessage("error", "JD save failed. Please check backend.");
     } finally {
       setSaving(false);
     }
   };
 
+  const copyJD = async () => {
+    if (!jd.trim()) {
+      showMessage("error", "No JD available to copy.");
+      return;
+    }
+
+    await navigator.clipboard.writeText(jd);
+    showMessage("success", "JD copied to clipboard.");
+  };
+
   return (
-    <div className="container mt-4">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3>Generate Job Description</h3>
-        <button className="btn btn-secondary" onClick={() => navigate("/home")}>
+    <div className="jd-page">
+      <div className="jd-topbar">
+        <div>
+          <span className="page-eyebrow">AI Job Description Generator</span>
+          <h1>Create a structured JD</h1>
+          <p>
+            Generate role-specific responsibilities, requirements, and skills for
+            smarter resume screening.
+          </p>
+        </div>
+
+        <button className="secondary-action" onClick={() => navigate("/home")}>
           Back to Dashboard
         </button>
       </div>
 
-      <div className="card p-3 mb-3">
-        <label className="form-label fw-bold">Select Profile</label>
-        <select
-          className="form-control"
-          value={profile}
-          onChange={(e) => setProfile(e.target.value)}
-        >
-          {suggestions.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+      {message.text && (
+        <div className={`status-banner ${message.type}`}>
+          {message.text}
+        </div>
+      )}
 
-        <button
-          className="btn btn-primary mt-3"
-          onClick={handleGenerate}
-          disabled={loading}
-        >
-          {loading ? "Generating..." : "Generate JD"}
-        </button>
-      </div>
+      <div className="jd-layout">
+        <div className="jd-control-card">
+          <h2>Role setup</h2>
+          <p>Choose a profile or enter your own custom role.</p>
 
-      <div className="card p-3">
-        <label className="form-label fw-bold">Edit JD</label>
-        <textarea
-          className="form-control"
-          rows={14}
-          value={jd}
-          onChange={(e) => setJd(e.target.value)}
-          placeholder="JD will appear here..."
-        />
+          <div className="form-block">
+            <label>Select profile</label>
+            <select
+              value={profile}
+              onChange={(e) => setProfile(e.target.value)}
+              disabled={!!customProfile.trim()}
+            >
+              {suggestions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <button
-          className="btn btn-success mt-3"
-          onClick={handleSave}
-          disabled={saving || !jd.trim()}
-        >
-          {saving ? "Saving..." : "Save JD"}
-        </button>
+          <div className="form-block">
+            <label>Custom profile</label>
+            <input
+              type="text"
+              value={customProfile}
+              onChange={(e) => setCustomProfile(e.target.value)}
+              placeholder="Example: Backend Developer"
+            />
+          </div>
+
+          <div className="selected-role-box">
+            <span>Selected role</span>
+            <strong>{selectedProfile}</strong>
+          </div>
+
+          <button
+            className="primary-action full-width"
+            onClick={handleGenerate}
+            disabled={loading}
+          >
+            {loading ? "Generating..." : "Generate JD"}
+          </button>
+        </div>
+
+        <div className="jd-editor-card">
+          <div className="editor-header">
+            <div>
+              <h2>Edit Job Description</h2>
+              <p>Review, customize, copy, or save the generated JD.</p>
+            </div>
+
+            <button className="light-action" onClick={copyJD}>
+              Copy
+            </button>
+          </div>
+
+          <textarea
+            value={jd}
+            onChange={(e) => setJd(e.target.value)}
+            placeholder="Your generated job description will appear here..."
+          />
+
+          <div className="editor-footer">
+            <span>{jd.length} characters</span>
+
+            <button
+              className="success-action"
+              onClick={handleSave}
+              disabled={saving || !jd.trim()}
+            >
+              {saving ? "Saving..." : "Save JD"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

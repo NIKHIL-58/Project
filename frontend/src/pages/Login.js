@@ -10,138 +10,143 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+  const [message, setMessage] = useState({ type: "", text: "" });
+
   const navigate = useNavigate();
+
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
-    if (!username || !password) {
-      alert("⚠️ Please fill in all fields");
+
+    if (!username.trim() || !password.trim()) {
+      showMessage("error", "Please enter your username and password.");
       return;
     }
 
     setLoading(true);
+    setMessage({ type: "", text: "" });
+
     try {
       const response = await login(username, password);
-      
-      // Save token
+
       localStorage.setItem("token", response.data.access_token);
       localStorage.setItem("username", username);
-      
+
       if (rememberMe) {
         localStorage.setItem("rememberMe", "true");
+      } else {
+        localStorage.removeItem("rememberMe");
       }
 
       navigate("/home");
     } catch (error) {
       console.error(error);
-      alert("❌ Login failed! Please check your credentials.");
+      showMessage("error", "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-wrapper">
+    <div className="auth-page">
+      <div className="auth-left-panel">
+        <div className="auth-brand">
+          <div className="brand-mark">S</div>
+          <div>
+            <h1>SmartHire</h1>
+            <p>AI Resume Screening Platform</p>
+          </div>
+        </div>
+
+        <div className="auth-hero-content">
+          <span className="auth-badge">AI Powered Hiring</span>
+          <h2>Shortlist the right candidates faster.</h2>
+          <p>
+            Generate job descriptions, upload resumes, and let AI rank the best-fit
+            candidates for every role.
+          </p>
+
+          <div className="auth-feature-list">
+            <div>Structured job descriptions</div>
+            <div>Resume parsing and scoring</div>
+            <div>Candidate ranking and shortlisting</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="auth-right-panel">
         <div className="auth-card">
           <div className="auth-header">
-            <div className="logo-container">
-              <div className="logo-circle">
-                <i className="fas fa-sign-in-alt"></i>
-              </div>
-            </div>
-            <h2 className="auth-title">Welcome Back!</h2>
-            <p className="auth-subtitle">Sign in to continue to your account</p>
+            <span className="auth-small-title">Welcome back</span>
+            <h2>Sign in to SmartHire</h2>
+            <p>Continue managing your AI hiring workflow.</p>
           </div>
+
+          {message.text && (
+            <div className={`auth-alert ${message.type}`}>
+              {message.text}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="auth-form">
             <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-user"></i> Username
-              </label>
+              <label>Username</label>
               <input
                 type="text"
-                className="form-control"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
-                required
+                autoComplete="username"
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-lock"></i> Password
-              </label>
-              <div className="password-input-wrapper">
+              <label>Password</label>
+              <div className="password-field">
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="form-control"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                 >
-                  <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
 
             <div className="form-options">
-              <div className="custom-control custom-checkbox">
+              <label className="checkbox-row">
                 <input
                   type="checkbox"
-                  className="custom-control-input"
-                  id="rememberMe"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                <label className="custom-control-label" htmlFor="rememberMe">
-                  Remember me
-                </label>
-              </div>
-              <button type="button" className="link-button forgot-password">
-                Forgot Password?
+                <span>Remember me</span>
+              </label>
+
+              <button type="button" className="text-btn">
+                Forgot password?
               </button>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-block auth-btn" disabled={loading}>
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm mr-2"></span>
-                  Signing In...
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-sign-in-alt mr-2"></i>
-                  Sign In
-                </>
-              )}
+            <button type="submit" className="auth-main-btn" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
             </button>
 
-            <div className="divider">
-              <span>OR</span>
-            </div>
-
-            <div className="auth-footer">
-              <p>
-                Don't have an account?{" "}
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => navigate("/register")}
-                >
-                  Create Account
-                </button>
-              </p>
-            </div>
+            <p className="auth-switch">
+              Don&apos;t have an account?{" "}
+              <button type="button" onClick={() => navigate("/register")}>
+                Create account
+              </button>
+            </p>
           </form>
         </div>
       </div>

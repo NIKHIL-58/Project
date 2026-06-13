@@ -12,215 +12,226 @@ function Register() {
     password: "",
     confirmPassword: "",
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
 
   const validateForm = () => {
     const newErrors = {};
-    
-    if (formData.username.length < 3) {
-      newErrors.username = "Username must be at least 3 characters";
+
+    if (formData.username.trim().length < 3) {
+      newErrors.username = "Username must be at least 3 characters.";
     }
-    
+
     if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email";
+      newErrors.email = "Please enter a valid email address.";
     }
-    
+
     if (formData.phone && !/^\d{10}$/.test(formData.phone.replace(/\D/g, ""))) {
-      newErrors.phone = "Please enter a valid 10-digit phone number";
+      newErrors.phone = "Please enter a valid 10-digit phone number.";
     }
-    
+
     if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+      newErrors.password = "Password must be at least 6 characters.";
     }
-    
+
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
+      newErrors.confirmPassword = "Passwords do not match.";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    // Clear error for this field
-    if (errors[e.target.name]) {
-      setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+
+    if (message.text) {
+      setMessage({ type: "", text: "" });
     }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setLoading(true);
+    setMessage({ type: "", text: "" });
+
     try {
       await register(formData.username, formData.password);
-      alert("🎉 Registration successful! Please login to continue.");
-      navigate("/login");
+      setMessage({
+        type: "success",
+        text: "Account created successfully. Redirecting to login...",
+      });
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 1200);
     } catch (error) {
       console.error(error);
-      alert("❌ Registration failed! Username might already exist.");
+      setMessage({
+        type: "error",
+        text: "Registration failed. Username might already exist.",
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-wrapper">
-        <div className="auth-card">
-          <div className="auth-header">
-            <div className="logo-container">
-              <div className="logo-circle">
-                <i className="fas fa-user-plus"></i>
-              </div>
-            </div>
-            <h2 className="auth-title">Create Account</h2>
-            <p className="auth-subtitle">Join us today! Fill in your details below</p>
+    <div className="auth-page">
+      <div className="auth-left-panel">
+        <div className="auth-brand">
+          <div className="brand-mark">S</div>
+          <div>
+            <h1>SmartHire</h1>
+            <p>AI Resume Screening Platform</p>
           </div>
+        </div>
+
+        <div className="auth-hero-content">
+          <span className="auth-badge">Start Hiring Smarter</span>
+          <h2>Create your hiring workspace.</h2>
+          <p>
+            Build a resume bank, generate job descriptions, and use AI matching
+            to find the strongest candidates.
+          </p>
+
+          <div className="auth-feature-list">
+            <div>Secure JWT authentication</div>
+            <div>Permanent resume storage</div>
+            <div>AI-powered candidate matching</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="auth-right-panel">
+        <div className="auth-card register-card">
+          <div className="auth-header">
+            <span className="auth-small-title">Get started</span>
+            <h2>Create account</h2>
+            <p>Enter your details to create a SmartHire account.</p>
+          </div>
+
+          {message.text && (
+            <div className={`auth-alert ${message.type}`}>
+              {message.text}
+            </div>
+          )}
 
           <form onSubmit={handleRegister} className="auth-form">
             <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-user"></i> Username *
-              </label>
+              <label>Username *</label>
               <input
                 type="text"
-                className={`form-control ${errors.username ? "is-invalid" : ""}`}
                 name="username"
+                className={errors.username ? "input-error" : ""}
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="Enter your username"
-                required
+                placeholder="Choose a username"
               />
-              {errors.username && (
-                <div className="invalid-feedback">{errors.username}</div>
-              )}
+              {errors.username && <small>{errors.username}</small>}
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  className={errors.email ? "input-error" : ""}
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                />
+                {errors.email && <small>{errors.email}</small>}
+              </div>
+
+              <div className="form-group">
+                <label>Phone</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  className={errors.phone ? "input-error" : ""}
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="9876543210"
+                />
+                {errors.phone && <small>{errors.phone}</small>}
+              </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-envelope"></i> Email
-              </label>
-              <input
-                type="email"
-                className={`form-control ${errors.email ? "is-invalid" : ""}`}
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="your.email@example.com"
-              />
-              {errors.email && (
-                <div className="invalid-feedback">{errors.email}</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-phone"></i> Phone
-              </label>
-              <input
-                type="tel"
-                className={`form-control ${errors.phone ? "is-invalid" : ""}`}
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="+1 (555) 123-4567"
-              />
-              {errors.phone && (
-                <div className="invalid-feedback">{errors.phone}</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-lock"></i> Password *
-              </label>
-              <div className="password-input-wrapper">
+              <label>Password *</label>
+              <div className="password-field">
                 <input
                   type={showPassword ? "text" : "password"}
-                  className={`form-control ${errors.password ? "is-invalid" : ""}`}
                   name="password"
+                  className={errors.password ? "input-error" : ""}
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="Enter your password"
-                  required
+                  placeholder="Create password"
                 />
                 <button
                   type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                 >
-                  <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
-              {errors.password && (
-                <div className="invalid-feedback d-block">{errors.password}</div>
-              )}
+              {errors.password && <small>{errors.password}</small>}
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                <i className="fas fa-lock"></i> Confirm Password *
-              </label>
-              <div className="password-input-wrapper">
+              <label>Confirm Password *</label>
+              <div className="password-field">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
-                  className={`form-control ${errors.confirmPassword ? "is-invalid" : ""}`}
                   name="confirmPassword"
+                  className={errors.confirmPassword ? "input-error" : ""}
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  placeholder="Re-enter your password"
-                  required
+                  placeholder="Confirm password"
                 />
                 <button
                   type="button"
-                  className="password-toggle"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
                 >
-                  <i className={`fas ${showConfirmPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  {showConfirmPassword ? "Hide" : "Show"}
                 </button>
               </div>
-              {errors.confirmPassword && (
-                <div className="invalid-feedback d-block">{errors.confirmPassword}</div>
-              )}
+              {errors.confirmPassword && <small>{errors.confirmPassword}</small>}
             </div>
 
-            <button type="submit" className="btn btn-primary btn-block auth-btn" disabled={loading}>
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm mr-2"></span>
-                  Creating Account...
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-user-plus mr-2"></i>
-                  Create Account
-                </>
-              )}
+            <button type="submit" className="auth-main-btn" disabled={loading}>
+              {loading ? "Creating account..." : "Create Account"}
             </button>
 
-            <div className="auth-footer">
-              <p>
-                Already have an account?{" "}
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => navigate("/login")}
-                >
-                  Sign In
-                </button>
-              </p>
-            </div>
+            <p className="auth-switch">
+              Already have an account?{" "}
+              <button type="button" onClick={() => navigate("/login")}>
+                Sign in
+              </button>
+            </p>
           </form>
         </div>
       </div>
